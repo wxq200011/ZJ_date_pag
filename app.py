@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Border, Side
-from openpyxl.comments import Comment  # 【新增】引入批注模块
+from openpyxl.comments import Comment
 from datetime import datetime, time, timedelta
 import io
 
@@ -206,9 +206,8 @@ with st.expander("📥 点击下载上传模板（包含说明和标准示例，
     zhaji_headers = ['编号', '姓名', '部门', '日期', '日期2', '时间', '考勤状态', '考勤点', '自定义名称', '数据来源', '处理类型', '体温', '体温异常']
     ws_zhaji.append(zhaji_headers)
     
-    # 【新增】给“日期”列（D1）添加批注
-    # 如果原文件批注内容不同，请修改下面引号里的这段文字
-    comment_text = "请填入完整日期时间，格式如：2026-08-06 07:06:43"
+    # 给“日期”列（D1）添加批注
+    comment_text = "直接粘贴即可，无需在意显示格式"
     comment = Comment(comment_text, "系统提示")
     comment.width = 200
     comment.height = 50
