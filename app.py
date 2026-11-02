@@ -14,32 +14,26 @@ def process_zhaji(file):
     df = df[["编号", "姓名", "部门", "日期", "考勤点"]].copy()
     df.rename(columns={"日期": "完整日期和时间"}, inplace=True)
     
-    # 统一的日期时间解析函数（超级解析器）
-    def parse_dt(val):
-        if pd.isna(val): return pd.NaT
-        try:
-            if isinstance(val, str):
-                val = val.strip().replace('/', '-')
-                return pd.to_datetime(val)
-            if isinstance(val, (int, float)):
-                # 正常 Excel 序列号是 40000 多，如果极小可能是错误读入，放大
-                if 0 < val < 1:
-                    val = val * 10**9
-                return pd.to_datetime(val, unit='D', origin='1899-12-30')
-        except:
-            pass
-        return pd.NaT
-
-    df["完整日期和时间"] = df["完整日期和时间"].apply(parse_dt)
+    # 【超级日期解析器】兼容文本日期与 Excel 数字序列号
+    raw_dt = df['完整日期和时间'].astype(str).str.strip()
+    dt_str = pd.to_datetime(raw_dt, errors='coerce')
     
-    # 提取进出状态（保留最新版，防下划线干扰）
+    numeric_vals = pd.to_numeric(raw_dt, errors='coerce')
+    numeric_vals = numeric_vals.apply(lambda x: x * 10**9 if pd.notna(x) and 0 < x < 1 else x)
+    dt_num = pd.to_datetime(numeric_vals, unit='D', origin='1899-12-30', errors='coerce')
+    
+    df['完整日期和时间'] = dt_str.fillna(dt_num)
+    
+    # 【考勤点前缀提取】优先匹配“出”，其次“进”，最后“入”
     def extract_status(kaoqin_point):
         if pd.isna(kaoqin_point): return ""
         text = str(kaoqin_point).strip()
         prefix = text.split('_')[0]
+        
         if '出' in prefix: return '出'
         elif '进' in prefix: return '进'
-        elif '入' in prefix: return '进'
+        elif '入' in prefix: return '进' 
+        
         if '出' in text: return '出'
         if '进' in text: return '进'
         if '入' in text: return '进'
@@ -62,9 +56,7 @@ def process_banci(file):
     df = df[["序号", "姓名", "日期", "班次"]].copy()
     df["班次"] = df["班次"].replace("未排班", "缺勤")
     
-    # 统一排班表日期格式为 YYYY-MM-DD，防止格式不一致导致匹配失败
     df['日期'] = pd.to_datetime(df['日期'], errors='coerce').dt.strftime('%Y-%m-%d')
-    
     return df
 
 def calc_outside(df_zhaji, df_banci):
@@ -88,8 +80,9 @@ def calc_outside(df_zhaji, df_banci):
 
     for (name, date), group in valid_df.groupby(['姓名', '日期']):
         sample_time = group['完整日期和时间'].iloc[0]
+        # 【核心修复】时间窗口放宽到当天的 23:59:59，防止晚上8点后的“出”被忽略
         win_start = datetime.combine(sample_time.date(), time(8, 0, 0))
-        win_end = datetime.combine(sample_time.date(), time(20, 0, 0))
+        win_end = datetime.combine(sample_time.date(), time(23, 59, 59))
         
         last_out_time = None
         for _, row in group.iterrows():
@@ -100,6 +93,7 @@ def calc_outside(df_zhaji, df_banci):
                 if win_start <= t <= win_end:
                     last_out_time = t
             elif s == '进' and last_out_time is not None:
+                # 对“进”不作时间限制，只要前面有记录的“出”就配对
                 duration_minutes = (t - last_out_time).total_seconds() / 60.0
                 if duration_minutes > 2:
                     outside_records.append({
@@ -218,6 +212,7 @@ with st.expander("📥 点击下载上传模板（包含说明和标准示例，
     wb_zhaji = openpyxl.Workbook()
     ws_zhaji = wb_zhaji.active
     ws_zhaji.title = "Sheet1"
+    
     zhaji_headers = ['编号', '姓名', '部门', '日期', '日期2', '时间', '考勤状态', '考勤点', '自定义名称', '数据来源', '处理类型', '体温', '体温异常']
     ws_zhaji.append(zhaji_headers)
     
@@ -254,8 +249,10 @@ with st.expander("📥 点击下载上传模板（包含说明和标准示例，
     wb_banci = openpyxl.Workbook()
     ws_banci = wb_banci.active
     ws_banci.title = "排班明细(1人1天1行)"
+    
     ws_banci.append(['梓阳俊-排班明细（1人1天1行,1天1班次1岗位,同名员工已合并）8:30左右=白班/20:30左右=晚班/空白=未排班'])
     ws_banci.merge_cells('A1:E1')
+    
     ws_banci.append(['序号', '姓名', '日期', '班次', '岗位'])
     ws_banci.append([1, '刘*', '2026-05-03', '白班', '厂区/办公室清洁'])
     ws_banci.append([2, '华**', '2026-05-03', '白班', '厂区/办公室清洁'])
