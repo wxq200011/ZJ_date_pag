@@ -231,8 +231,10 @@ with st.expander("📥 点击下载上传模板（包含说明和标准示例，
         # 循环写入 E 列和 F 列公式（自动匹配当前行号）
         formula_e = f'=IF(ISTEXT(D{row_idx}),DATEVALUE(SUBSTITUTE(LEFT(D{row_idx},FIND(" ",D{row_idx}&" ")-1),"-","/")),INT(D{row_idx}))'
         formula_f = f'=IFERROR(IF(ISTEXT(D{row_idx}),TIMEVALUE(TRIM(MID(D{row_idx},FIND(" ",D{row_idx})+1,99))),MOD(D{row_idx},1)),"")'
-        ws_zhaji.cell(row=row_idx, column=5, value=formula_e)
-        ws_zhaji.cell(row=row_idx, column=6, value=formula_f)
+        
+        # 写入公式并强制设置单元格格式
+        ws_zhaji.cell(row=row_idx, column=5, value=formula_e).number_format = 'yyyy/m/d'  # 短日期
+        ws_zhaji.cell(row=row_idx, column=6, value=formula_f).number_format = 'h:mm:ss'   # 时间
         
     template_zhaji = io.BytesIO()
     wb_zhaji.save(template_zhaji)
@@ -273,7 +275,7 @@ with st.expander("📥 点击下载上传模板（包含说明和标准示例，
             file_name="排班表 - 模板.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-    st.info("💡 提示：模板内已包含标准示例。闸机表的“日期”列已添加批注，“日期2”和“时间”列已自动填充了适配至第 27 行的公式。")
+    st.info("💡 提示：模板内已包含标准示例。闸机表的“日期”列已添加批注，“日期2”和“时间”列已设为标准日期时间格式，并填充了适配至第 27 行的公式。")
 # ----------------------------
 
 col1, col2 = st.columns(2)
