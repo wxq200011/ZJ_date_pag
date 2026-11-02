@@ -14,27 +14,35 @@ def process_zhaji(file):
     df = df[["编号", "姓名", "部门", "日期", "考勤点"]].copy()
     df.rename(columns={"日期": "完整日期和时间"}, inplace=True)
     
-    # 【核心修改点】改为关键词匹配，不再管字符串长度
+    # 统一的日期时间解析函数（超级解析器）
+    def parse_dt(val):
+        if pd.isna(val): return pd.NaT
+        try:
+            if isinstance(val, str):
+                val = val.strip().replace('/', '-')
+                return pd.to_datetime(val)
+            if isinstance(val, (int, float)):
+                # 正常 Excel 序列号是 40000 多，如果极小可能是错误读入，放大
+                if 0 < val < 1:
+                    val = val * 10**9
+                return pd.to_datetime(val, unit='D', origin='1899-12-30')
+        except:
+            pass
+        return pd.NaT
+
+    df["完整日期和时间"] = df["完整日期和时间"].apply(parse_dt)
+    
+    # 提取进出状态（保留最新版，防下划线干扰）
     def extract_status(kaoqin_point):
         if pd.isna(kaoqin_point): return ""
         text = str(kaoqin_point).strip()
-        
-        # 1. 只取第一个下划线前面的内容（完美避开“进门读卡器”的干扰）
         prefix = text.split('_')[0]
-        
-        # 2. 优先匹配“出”，然后是“进”，最后是“入”
-        if '出' in prefix:
-            return '出'
-        elif '进' in prefix:
-            return '进'
-        elif '入' in prefix:
-            return '进'  # 按要求将“入”统一处理为“进”
-            
-        # 3. 极端兜底：如果整串里都没有下划线，直接全局找（应对不规范数据）
+        if '出' in prefix: return '出'
+        elif '进' in prefix: return '进'
+        elif '入' in prefix: return '进'
         if '出' in text: return '出'
         if '进' in text: return '进'
         if '入' in text: return '进'
-        
         return ""
 
     df["进出状态"] = df["考勤点"].apply(extract_status)
@@ -53,20 +61,18 @@ def process_banci(file):
         
     df = df[["序号", "姓名", "日期", "班次"]].copy()
     df["班次"] = df["班次"].replace("未排班", "缺勤")
+    
+    # 统一排班表日期格式为 YYYY-MM-DD，防止格式不一致导致匹配失败
+    df['日期'] = pd.to_datetime(df['日期'], errors='coerce').dt.strftime('%Y-%m-%d')
+    
     return df
 
 def calc_outside(df_zhaji, df_banci):
     """计算外出时长"""
-    numeric_vals = pd.to_numeric(df_zhaji['完整日期和时间'], errors='coerce')
-    dt_str = pd.to_datetime(df_zhaji['完整日期和时间'], errors='coerce')
-    dt_num = pd.to_datetime(numeric_vals, unit='D', origin='1899-12-30', errors='coerce')
-    df_zhaji['完整日期和时间'] = dt_str.fillna(dt_num)
-
     df_zhaji['日期'] = df_zhaji['完整日期和时间'].dt.strftime('%Y-%m-%d')
     df_zhaji['姓名'] = df_zhaji['姓名'].astype(str).str.strip()
     
     df_banci['姓名'] = df_banci['姓名'].astype(str).str.strip()
-    df_banci['日期'] = df_banci['日期'].astype(str).str.strip()
     df_banci['班次'] = df_banci['班次'].astype(str).str.strip()
 
     df_banci.rename(columns={'班次': '班次_shift'}, inplace=True)
@@ -209,25 +215,21 @@ st.markdown("请上传 **闸机记录** 和 **排班表**，点击下方按钮�
 with st.expander("📥 点击下载上传模板（包含说明和标准示例，请直接填入数据后上传）"):
     col_t1, col_t2 = st.columns(2)
     
-    # 动态生成闸机模板
     wb_zhaji = openpyxl.Workbook()
     ws_zhaji = wb_zhaji.active
     ws_zhaji.title = "Sheet1"
-    
     zhaji_headers = ['编号', '姓名', '部门', '日期', '日期2', '时间', '考勤状态', '考勤点', '自定义名称', '数据来源', '处理类型', '体温', '体温异常']
     ws_zhaji.append(zhaji_headers)
     
-    # 给“日期”列（D1）添加批注
     comment_text = "直接粘贴即可，无需在意显示格式"
     comment = Comment(comment_text, "系统提示")
     comment.width = 200
     comment.height = 50
     ws_zhaji['D1'].comment = comment
 
-    # 写入示例数据和复杂的 Excel 公式（填充至第 27 行）
     for row_idx in range(2, 28):
         if row_idx == 2:
-            ws_zhaji.cell(row=row_idx, column=1, value='001').number_format = '@' # 强制文本
+            ws_zhaji.cell(row=row_idx, column=1, value='001').number_format = '@'
             ws_zhaji.cell(row=row_idx, column=2, value='张**')
             ws_zhaji.cell(row=row_idx, column=3, value='制造')
             ws_zhaji.cell(row=row_idx, column=4, value=46150.461805555555)
@@ -239,31 +241,22 @@ with st.expander("📥 点击下载上传模板（包含说明和标准示例，
             ws_zhaji.cell(row=row_idx, column=12, value='-')
             ws_zhaji.cell(row=row_idx, column=13, value='-')
         
-        # 循环写入 E 列和 F 列公式（自动匹配当前行号）
         formula_e = f'=IF(ISTEXT(D{row_idx}),DATEVALUE(SUBSTITUTE(LEFT(D{row_idx},FIND(" ",D{row_idx}&" ")-1),"-","/")),INT(D{row_idx}))'
         formula_f = f'=IFERROR(IF(ISTEXT(D{row_idx}),TIMEVALUE(TRIM(MID(D{row_idx},FIND(" ",D{row_idx})+1,99))),MOD(D{row_idx},1)),"")'
         
-        # 写入公式并强制设置单元格格式
-        ws_zhaji.cell(row=row_idx, column=5, value=formula_e).number_format = 'yyyy/m/d'  # 短日期
-        ws_zhaji.cell(row=row_idx, column=6, value=formula_f).number_format = 'h:mm:ss'   # 时间
+        ws_zhaji.cell(row=row_idx, column=5, value=formula_e).number_format = 'yyyy/m/d'
+        ws_zhaji.cell(row=row_idx, column=6, value=formula_f).number_format = 'h:mm:ss'
         
     template_zhaji = io.BytesIO()
     wb_zhaji.save(template_zhaji)
     template_zhaji.seek(0)
     
-    # 动态生成排班模板
     wb_banci = openpyxl.Workbook()
     ws_banci = wb_banci.active
     ws_banci.title = "排班明细(1人1天1行)"
-    
-    # 大标题并合并单元格
     ws_banci.append(['梓阳俊-排班明细（1人1天1行,1天1班次1岗位,同名员工已合并）8:30左右=白班/20:30左右=晚班/空白=未排班'])
     ws_banci.merge_cells('A1:E1')
-    
-    # 表头
     ws_banci.append(['序号', '姓名', '日期', '班次', '岗位'])
-    
-    # 示例数据
     ws_banci.append([1, '刘*', '2026-05-03', '白班', '厂区/办公室清洁'])
     ws_banci.append([2, '华**', '2026-05-03', '白班', '厂区/办公室清洁'])
     ws_banci.append([3, '张**', '2026-05-03', '白班', '厂区/办公室清洁'])
