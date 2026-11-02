@@ -193,7 +193,7 @@ st.set_page_config(page_title="外出时长一键统计", page_icon="📊")
 st.title("📊 外出时长一键统计系统")
 st.markdown("请上传 **闸机记录** 和 **排班表**，点击下方按钮即可自动生成最终结果。")
 
-# --- 新增：下载模板区域（还原用户提供的具体格式） ---
+# --- 下载模板区域（已按最新截图精准还原格式和公式） ---
 with st.expander("📥 点击下载上传模板（包含说明和标准示例，请直接填入数据后上传）"):
     col_t1, col_t2 = st.columns(2)
     
@@ -201,14 +201,32 @@ with st.expander("📥 点击下载上传模板（包含说明和标准示例，
     wb_zhaji = openpyxl.Workbook()
     ws_zhaji = wb_zhaji.active
     ws_zhaji.title = "Sheet1"
-    # 闸机表头
+    
     zhaji_headers = ['编号', '姓名', '部门', '日期', '日期2', '时间', '考勤状态', '考勤点', '自定义名称', '数据来源', '处理类型', '体温', '体温异常']
     ws_zhaji.append(zhaji_headers)
-    # 闸机示例数据
-    zhaji_data = ['10000027', '员工001', '制造', '2026-08-06 07:06:43', '2026-08-06', '=TIMEVALUE(RIGHT(D2, 8))', '无', '东门门禁3进_门1_进门读卡器1', '-', '原始记录', '-', '-', '-']
-    ws_zhaji.append(zhaji_data)
-    ws_zhaji['A2'].number_format = '@'  # 强制编号为文本
-    # 保存到内存
+    
+    # 写入示例数据和复杂的 Excel 公式（填充至第 27 行）
+    for row_idx in range(2, 28):
+        if row_idx == 2:
+            # 第一行包含示例数据
+            ws_zhaji.cell(row=row_idx, column=1, value='001').number_format = '@' # 强制文本
+            ws_zhaji.cell(row=row_idx, column=2, value='张**')
+            ws_zhaji.cell(row=row_idx, column=3, value='制造')
+            ws_zhaji.cell(row=row_idx, column=4, value=46150.461805555555)
+            ws_zhaji.cell(row=row_idx, column=7, value='无')
+            ws_zhaji.cell(row=row_idx, column=8, value='热充厂出口_门1_进门读卡器1')
+            ws_zhaji.cell(row=row_idx, column=9, value='-')
+            ws_zhaji.cell(row=row_idx, column=10, value='原始记录')
+            ws_zhaji.cell(row=row_idx, column=11, value='-')
+            ws_zhaji.cell(row=row_idx, column=12, value='-')
+            ws_zhaji.cell(row=row_idx, column=13, value='-')
+        
+        # 循环写入 E 列和 F 列公式（自动匹配当前行号）
+        formula_e = f'=IF(ISTEXT(D{row_idx}),DATEVALUE(SUBSTITUTE(LEFT(D{row_idx},FIND(" ",D{row_idx}&" ")-1),"-","/")),INT(D{row_idx}))'
+        formula_f = f'=IFERROR(IF(ISTEXT(D{row_idx}),TIMEVALUE(TRIM(MID(D{row_idx},FIND(" ",D{row_idx})+1,99))),MOD(D{row_idx},1)),"")'
+        ws_zhaji.cell(row=row_idx, column=5, value=formula_e)
+        ws_zhaji.cell(row=row_idx, column=6, value=formula_f)
+        
     template_zhaji = io.BytesIO()
     wb_zhaji.save(template_zhaji)
     template_zhaji.seek(0)
@@ -217,16 +235,19 @@ with st.expander("📥 点击下载上传模板（包含说明和标准示例，
     wb_banci = openpyxl.Workbook()
     ws_banci = wb_banci.active
     ws_banci.title = "排班明细(1人1天1行)"
-    # 排班表大标题
+    
+    # 大标题并合并单元格
     ws_banci.append(['梓阳俊-排班明细（1人1天1行,1天1班次1岗位,同名员工已合并）8:30左右=白班/20:30左右=晚班/空白=未排班'])
-    ws_banci.merge_cells('A1:E1') # 合并单元格
-    # 排班表表头
+    ws_banci.merge_cells('A1:E1')
+    
+    # 表头
     ws_banci.append(['序号', '姓名', '日期', '班次', '岗位'])
-    # 排班表示例数据
-    ws_banci.append([1, '员工076', '2026-08-07', '白班', '改制'])
-    ws_banci.append([2, '员工076', '2026-08-08', '未排班', '改制'])
-    ws_banci.append([3, '员工076', '2026-08-09', '晚班', '改制'])
-    # 保存到内存
+    
+    # 示例数据（根据最新截图修改）
+    ws_banci.append([1, '刘*', '2026-05-03', '白班', '厂区/办公室清洁'])
+    ws_banci.append([2, '华**', '2026-05-03', '白班', '厂区/办公室清洁'])
+    ws_banci.append([3, '张**', '2026-05-03', '白班', '厂区/办公室清洁'])
+    
     template_banci = io.BytesIO()
     wb_banci.save(template_banci)
     template_banci.seek(0)
@@ -245,7 +266,7 @@ with st.expander("📥 点击下载上传模板（包含说明和标准示例，
             file_name="排班表 - 模板.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-    st.info("💡 提示：模板内已包含标准示例（包含排班表的大标题以及闸机表的 Excel 计算公式）。请直接在示例下方填入你们的数据并上传即可。")
+    st.info("💡 提示：模板内已包含标准示例。闸机表的“日期2”和“时间”列已自动填充了适配至第 27 行的公式。")
 # ----------------------------
 
 col1, col2 = st.columns(2)
