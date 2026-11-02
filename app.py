@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Border, Side
+from openpyxl.comments import Comment  # 【新增】引入批注模块
 from datetime import datetime, time, timedelta
 import io
 
@@ -193,7 +194,7 @@ st.set_page_config(page_title="外出时长一键统计", page_icon="📊")
 st.title("📊 外出时长一键统计系统")
 st.markdown("请上传 **闸机记录** 和 **排班表**，点击下方按钮即可自动生成最终结果。")
 
-# --- 下载模板区域（已按最新截图精准还原格式和公式） ---
+# --- 下载模板区域 ---
 with st.expander("📥 点击下载上传模板（包含说明和标准示例，请直接填入数据后上传）"):
     col_t1, col_t2 = st.columns(2)
     
@@ -205,10 +206,17 @@ with st.expander("📥 点击下载上传模板（包含说明和标准示例，
     zhaji_headers = ['编号', '姓名', '部门', '日期', '日期2', '时间', '考勤状态', '考勤点', '自定义名称', '数据来源', '处理类型', '体温', '体温异常']
     ws_zhaji.append(zhaji_headers)
     
+    # 【新增】给“日期”列（D1）添加批注
+    # 如果原文件批注内容不同，请修改下面引号里的这段文字
+    comment_text = "请填入完整日期时间，格式如：2026-08-06 07:06:43"
+    comment = Comment(comment_text, "系统提示")
+    comment.width = 200
+    comment.height = 50
+    ws_zhaji['D1'].comment = comment
+
     # 写入示例数据和复杂的 Excel 公式（填充至第 27 行）
     for row_idx in range(2, 28):
         if row_idx == 2:
-            # 第一行包含示例数据
             ws_zhaji.cell(row=row_idx, column=1, value='001').number_format = '@' # 强制文本
             ws_zhaji.cell(row=row_idx, column=2, value='张**')
             ws_zhaji.cell(row=row_idx, column=3, value='制造')
@@ -243,7 +251,7 @@ with st.expander("📥 点击下载上传模板（包含说明和标准示例，
     # 表头
     ws_banci.append(['序号', '姓名', '日期', '班次', '岗位'])
     
-    # 示例数据（根据最新截图修改）
+    # 示例数据
     ws_banci.append([1, '刘*', '2026-05-03', '白班', '厂区/办公室清洁'])
     ws_banci.append([2, '华**', '2026-05-03', '白班', '厂区/办公室清洁'])
     ws_banci.append([3, '张**', '2026-05-03', '白班', '厂区/办公室清洁'])
@@ -266,7 +274,7 @@ with st.expander("📥 点击下载上传模板（包含说明和标准示例，
             file_name="排班表 - 模板.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-    st.info("💡 提示：模板内已包含标准示例。闸机表的“日期2”和“时间”列已自动填充了适配至第 27 行的公式。")
+    st.info("💡 提示：模板内已包含标准示例。闸机表的“日期”列已添加批注，“日期2”和“时间”列已自动填充了适配至第 27 行的公式。")
 # ----------------------------
 
 col1, col2 = st.columns(2)
