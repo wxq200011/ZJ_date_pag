@@ -14,17 +14,28 @@ def process_zhaji(file):
     df = df[["编号", "姓名", "部门", "日期", "考勤点"]].copy()
     df.rename(columns={"日期": "完整日期和时间"}, inplace=True)
     
+    # 【核心修改点】改为关键词匹配，不再管字符串长度
     def extract_status(kaoqin_point):
         if pd.isna(kaoqin_point): return ""
         text = str(kaoqin_point).strip()
-        length = len(text)
-        if length == 16:
-            status = text[5]
-        elif length == 12:
-            status = text[0]
-        else:
-            return ""
-        return "进" if status == "入" else status
+        
+        # 1. 只取第一个下划线前面的内容（完美避开“进门读卡器”的干扰）
+        prefix = text.split('_')[0]
+        
+        # 2. 优先匹配“出”，然后是“进”，最后是“入”
+        if '出' in prefix:
+            return '出'
+        elif '进' in prefix:
+            return '进'
+        elif '入' in prefix:
+            return '进'  # 按要求将“入”统一处理为“进”
+            
+        # 3. 极端兜底：如果整串里都没有下划线，直接全局找（应对不规范数据）
+        if '出' in text: return '出'
+        if '进' in text: return '进'
+        if '入' in text: return '进'
+        
+        return ""
 
     df["进出状态"] = df["考勤点"].apply(extract_status)
     return df[["编号", "姓名", "部门", "完整日期和时间", "考勤点", "进出状态"]]
